@@ -22,8 +22,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import logging
 logging.getLogger('tensorflow').setLevel(logging.ERROR)
 
-# Local imports
-from config.fragment_vectorizer import FragmentVectorizer
+# Local imports - FIXED
+from config.enhanced_fragment_vectorizer import EnhancedFragmentVectorizer
 from config.models.wide_tabtransformer import WideTabTransformer
 from config.arg_parser import parameter_parser
 
@@ -36,6 +36,7 @@ def print_header():
     print("=" * 80)
     print("SMART CONTRACT VULNERABILITY DETECTION")
     print("Wide + TabTransformer Neural Network")
+    print("Enhanced Vectorization System")
     print("=" * 80)
 
 def print_parameters(args):
@@ -84,26 +85,26 @@ def parse_smart_contracts(filename):
             else:
                 fragment.append(stripped)
 
-def create_dataset(filename, vector_length):
+def create_dataset(filename, args):
     """
-    Create vectorized dataset from smart contract file
+    Create enhanced vectorized dataset from smart contract file
     
     Args:
         filename: Path to smart contract file
-        vector_length: Dimension of Word2Vec vectors
+        args: Parsed arguments with vectorization parameters
         
     Returns:
-        pd.DataFrame: Dataset with vectors and labels
+        pd.DataFrame: Dataset with enhanced vectors and labels
     """
     print("\n" + "=" * 60)
-    print("DATASET CREATION")
+    print("ENHANCED DATASET CREATION")
     print("=" * 60)
     
     # Collect fragments
     fragments = []
-    vectorizer = FragmentVectorizer(vector_length)
+    vectorizer = EnhancedFragmentVectorizer(args.vec_length)
     
-    print("Collecting code fragments...")
+    print("Collecting code fragments with enhanced analysis...")
     start_time = time.time()
     
     for count, (fragment, label) in enumerate(parse_smart_contracts(filename), 1):
@@ -116,15 +117,25 @@ def create_dataset(filename, vector_length):
     print(f"Forward slices: {vectorizer.forward_slices}")
     print(f"Backward slices: {vectorizer.backward_slices}")
     
-    # Train Word2Vec model
-    print("\nTraining Word2Vec model...")
+    # Train enhanced Word2Vec model
+    print("\nTraining enhanced Word2Vec model...")
     start_time = time.time()
     vectorizer.train_model()
     training_time = time.time() - start_time
-    print(f"Word2Vec training completed in {training_time:.2f}s")
+    print(f"Enhanced Word2Vec training completed in {training_time:.2f}s")
     
-    # Vectorize fragments
-    print("\nVectorizing fragments...")
+    # Print vocabulary statistics if requested
+    if args.vocab_stats:
+        stats = vectorizer.get_vocabulary_stats()
+        print(f"\nVocabulary Statistics:")
+        print(f"- Total unique tokens: {stats['total_tokens']}")
+        print(f"- Final vocabulary size: {stats['final_vocab_size']}")
+        print(f"- Average fragment length: {stats['avg_fragment_length']:.2f}")
+        print(f"- Average complexity score: {stats['avg_complexity']:.2f}")
+        print(f"- Most common tokens: {[token for token, count in stats['most_common_tokens'][:10]]}")
+    
+    # Vectorize fragments with enhanced method
+    print("\nVectorizing fragments with enhanced method...")
     start_time = time.time()
     
     dataset = []
@@ -134,20 +145,21 @@ def create_dataset(filename, vector_length):
         dataset.append({"vector": vector, "label": fragment_data["label"]})
     
     vectorization_time = time.time() - start_time
-    print(f"\nVectorization completed in {vectorization_time:.2f}s")
+    print(f"\nEnhanced vectorization completed in {vectorization_time:.2f}s")
     
     # Create DataFrame
     df = pd.DataFrame(dataset)
     
-    # Print statistics
+    # Print enhanced statistics
     print("\n" + "=" * 60)
-    print("DATASET STATISTICS")
+    print("ENHANCED DATASET STATISTICS")
     print("=" * 60)
     print(f"Total samples: {len(df)}")
     print(f"Vulnerable samples (1): {sum(df['label'] == 1)}")
     print(f"Safe samples (0): {sum(df['label'] == 0)}")
     print(f"Vector shape: {df.iloc[0]['vector'].shape}")
     print(f"Vulnerability ratio: {sum(df['label'] == 1)/len(df)*100:.2f}%")
+    print(f"Vector non-zero ratio: {np.count_nonzero(df.iloc[0]['vector']) / df.iloc[0]['vector'].size * 100:.2f}%")
     
     return df
 
@@ -162,7 +174,7 @@ def main():
     
     # Prepare dataset path
     base_name = os.path.splitext(os.path.basename(args.filename))[0]
-    dataset_path = f"config/train_data/{base_name}_vectors.pkl"
+    dataset_path = f"config/train_data/{base_name}_enhanced_vectors.pkl"
     
     # Create data directory
     os.makedirs("config/train_data", exist_ok=True)
@@ -171,15 +183,15 @@ def main():
     
     # Load or create dataset
     if os.path.exists(dataset_path):
-        print("Loading existing dataset...")
+        print("Loading existing enhanced dataset...")
         dataset = pd.read_pickle(dataset_path)
-        print("Dataset loaded successfully!")
+        print("Enhanced dataset loaded successfully!")
     else:
-        print("Creating new dataset...")
-        dataset = create_dataset(args.filename, args.vec_length)
-        print(f"Saving dataset to {dataset_path}...")
+        print("Creating new enhanced dataset...")
+        dataset = create_dataset(args.filename, args)
+        print(f"Saving enhanced dataset to {dataset_path}...")
         dataset.to_pickle(dataset_path)
-        print("Dataset saved successfully!")
+        print("Enhanced dataset saved successfully!")
     
     # Model training and evaluation
     print("\n" + "=" * 60)
@@ -211,6 +223,7 @@ def main():
     print("FINAL SUMMARY")
     print("=" * 60)
     print(f"Architecture: Wide + TabTransformer")
+    print(f"Vectorization: Enhanced with vulnerability patterns")
     print(f"Dataset: {args.filename}")
     print(f"Vulnerability Type: {args.vt}")
     print(f"Training Time: {training_time:.2f}s")
@@ -230,4 +243,6 @@ if __name__ == '__main__':
         sys.exit(1)
     except Exception as e:
         print(f"\nError: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
