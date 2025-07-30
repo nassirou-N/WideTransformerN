@@ -16,6 +16,8 @@ import time
 import warnings
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+from IPython.display import display, Image
 
 # Suppress TensorFlow logging
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
