@@ -57,6 +57,7 @@ def print_parameters(args):
 def parse_smart_contracts(filename):
     """
     Parse smart contract file and extract code fragments with labels
+    Version corrigée qui ignore les identifiants de fichiers
     
     Args:
         filename: Path to smart contract file
@@ -66,6 +67,9 @@ def parse_smart_contracts(filename):
     """
     print(f'Parsing smart contracts from: {filename}')
     
+    # Pattern pour détecter les identifiants de fichiers (ex: "00 50020.sol")
+    file_pattern = re.compile(r'^\d+\s+\d+\.sol$')
+    
     with open(filename, "r", encoding="utf8") as file:
         fragment = []
         fragment_label = 0
@@ -74,23 +78,65 @@ def parse_smart_contracts(filename):
             stripped = line.strip()
             if not stripped:
                 continue
+            
+            # Ignorer les identifiants de fichiers
+            if file_pattern.match(stripped):
+                print(f"  Skipping file identifier: {stripped}")
+                continue
                 
             # Fragment separator
             if "-" * 40 in line and fragment:
                 yield fragment, fragment_label
                 fragment = []
-            # Label line
-            elif stripped.split()[0].isdigit():
-                if fragment:
-                    if stripped.isdigit():
-                        fragment_label = int(stripped)
-                    else:
-                        fragment.append(stripped)
-                else:
-                    fragment.append(stripped)
+            # Label line (plus strict : seulement '0' ou '1')
+            elif stripped in ['0', '1']:
+                fragment_label = int(stripped)
+                print(f"  Found label: {fragment_label}")
             # Code line
             else:
                 fragment.append(stripped)
+
+def debug_parse_smart_contracts(filename, max_fragments=3):
+    """
+    Version debug pour vérifier le parsing
+    
+    Args:
+        filename: Path to smart contract file
+        max_fragments: Nombre maximum de fragments à afficher
+    """
+    print(f"\n{'='*60}")
+    print("DEBUG: ANALYSE DU PARSING")
+    print(f"{'='*60}")
+    
+    fragments_analyzed = 0
+    
+    for i, (fragment, label) in enumerate(parse_smart_contracts(filename)):
+        if fragments_analyzed >= max_fragments:
+            break
+            
+        print(f"\n--- Fragment {i+1} (Label: {label}) ---")
+        print(f"Nombre de lignes: {len(fragment)}")
+        
+        # Afficher les premières lignes
+        for j, line in enumerate(fragment[:8]):
+            print(f"{j+1:2d}: {line}")
+        
+        if len(fragment) > 8:
+            print(f"    ... ({len(fragment) - 8} lignes supplémentaires)")
+        
+        # Vérifier s'il y a encore des identifiants de fichiers
+        polluted_lines = [line for line in fragment if line.endswith('.sol')]
+        if polluted_lines:
+            print(f"⚠️  ATTENTION: Lignes polluées détectées: {polluted_lines}")
+        else:
+            print("✅ Fragment propre (pas d'identifiants de fichiers)")
+            
+        fragments_analyzed += 1
+    
+    print(f"\n{'='*60}")
+
+
+                
 
 def create_dataset(filename, args):
     """
