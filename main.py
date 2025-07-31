@@ -7,7 +7,7 @@ This script implements a hybrid neural network architecture combining:
 - TabTransformer component: Deep transformer for complex patterns
 
 Usage:
-    python main.py contracts_re.txt -vt re --lr 0.00015 --epochs 60 --batch_size 4
+    python main.py contracts_re.txt -vt re --lr 0.00012 --epochs 80 --batch_size 6 --num_transformer_layers 4 --num_heads 12 --embedding_dim 96 --dropout 0.25
 """
 
 import os
@@ -17,6 +17,7 @@ import warnings
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import re
 from IPython.display import display, Image
 
 # Suppress TensorFlow logging
@@ -51,7 +52,7 @@ def print_parameters(args):
     print("\nParameters:")
     print("-" * 40)
     for arg in vars(args):
-        print(f"{arg:20}: {getattr(args, arg)}")
+        print(f"{arg:25}: {getattr(args, arg)}")
     print("-" * 40)
 
 def parse_smart_contracts(filename):
@@ -81,7 +82,6 @@ def parse_smart_contracts(filename):
             
             # Ignorer les identifiants de fichiers
             if file_pattern.match(stripped):
-                print(f"  Skipping file identifier: {stripped}")
                 continue
                 
             # Fragment separator
@@ -91,7 +91,6 @@ def parse_smart_contracts(filename):
             # Label line (plus strict : seulement '0' ou '1')
             elif stripped in ['0', '1']:
                 fragment_label = int(stripped)
-                print(f"  Found label: {fragment_label}")
             # Code line
             else:
                 fragment.append(stripped)
@@ -109,34 +108,44 @@ def debug_parse_smart_contracts(filename, max_fragments=3):
     print(f"{'='*60}")
     
     fragments_analyzed = 0
+    total_fragments = 0
+    vulnerable_count = 0
+    safe_count = 0
     
     for i, (fragment, label) in enumerate(parse_smart_contracts(filename)):
-        if fragments_analyzed >= max_fragments:
-            break
-            
-        print(f"\n--- Fragment {i+1} (Label: {label}) ---")
-        print(f"Nombre de lignes: {len(fragment)}")
-        
-        # Afficher les premières lignes
-        for j, line in enumerate(fragment[:8]):
-            print(f"{j+1:2d}: {line}")
-        
-        if len(fragment) > 8:
-            print(f"    ... ({len(fragment) - 8} lignes supplémentaires)")
-        
-        # Vérifier s'il y a encore des identifiants de fichiers
-        polluted_lines = [line for line in fragment if line.endswith('.sol')]
-        if polluted_lines:
-            print(f"⚠️  ATTENTION: Lignes polluées détectées: {polluted_lines}")
+        total_fragments += 1
+        if label == 1:
+            vulnerable_count += 1
         else:
-            print("✅ Fragment propre (pas d'identifiants de fichiers)")
+            safe_count += 1
             
-        fragments_analyzed += 1
+        if fragments_analyzed < max_fragments:
+            print(f"\n--- Fragment {i+1} (Label: {label}) ---")
+            print(f"Nombre de lignes: {len(fragment)}")
+            
+            # Afficher les premières lignes
+            for j, line in enumerate(fragment[:6]):
+                print(f"{j+1:2d}: {line}")
+            
+            if len(fragment) > 6:
+                print(f"    ... ({len(fragment) - 6} lignes supplémentaires)")
+            
+            # Vérifier s'il y a encore des identifiants de fichiers
+            polluted_lines = [line for line in fragment if line.endswith('.sol')]
+            if polluted_lines:
+                print(f"⚠️  ATTENTION: Lignes polluées détectées: {polluted_lines}")
+            else:
+                print("✅ Fragment propre (pas d'identifiants de fichiers)")
+                
+            fragments_analyzed += 1
     
     print(f"\n{'='*60}")
-
-
-                
+    print(f"STATISTIQUES DU DATASET:")
+    print(f"- Total des fragments: {total_fragments}")
+    print(f"- Contrats vulnérables (1): {vulnerable_count}")
+    print(f"- Contrats sûrs (0): {safe_count}")
+    print(f"- Ratio de vulnérabilité: {vulnerable_count/total_fragments*100:.2f}%")
+    print(f"{'='*60}")
 
 def create_dataset(filename, args):
     """
@@ -253,7 +262,10 @@ def plot_training_curves(history, save_path="training_curves.png", show_in_colab
         plt.show()
     else:
         # For non-Colab environments or if show_in_colab is False
-        display(Image(filename=save_path))
+        try:
+            display(Image(filename=save_path))
+        except:
+            print(f"Plot saved but cannot display. Check: {save_path}")
     
     plt.close()
     
@@ -319,7 +331,10 @@ def plot_metrics_comparison(results, save_path="metrics_comparison.png", show_in
     if show_in_colab and 'google.colab' in sys.modules:
         plt.show()
     else:
-        display(Image(filename=save_path))
+        try:
+            display(Image(filename=save_path))
+        except:
+            print(f"Plot saved but cannot display. Check: {save_path}")
     
     plt.close()
 
@@ -358,7 +373,10 @@ def plot_confusion_matrix_style(results, save_path="confusion_matrix_analysis.pn
     if show_in_colab and 'google.colab' in sys.modules:
         plt.show()
     else:
-        display(Image(filename=save_path))
+        try:
+            display(Image(filename=save_path))
+        except:
+            print(f"Plot saved but cannot display. Check: {save_path}")
     
     plt.close()
 
@@ -378,6 +396,23 @@ def main():
     # Print header and parameters
     print_header()
     print_parameters(args)
+    
+    # 🆕 DEBUG DU PARSING
+    print(f"\n{'='*60}")
+    print("VERIFICATION DU PARSING (MODE DEBUG)")
+    print(f"{'='*60}")
+    
+    # Test du parsing avec debug
+    debug_parse_smart_contracts(args.filename, max_fragments=3)
+    
+    # Demander confirmation avant de continuer (en mode interactif seulement)
+    if sys.stdin.isatty():  # Vérifie si on est en mode interactif
+        user_input = input("\nLe parsing semble-t-il correct ? (y/n) [y]: ").lower().strip()
+        if user_input and user_input != 'y':
+            print("Parsing interrompu. Vérifiez les données d'entrée.")
+            return
+    else:
+        print("\nMode non-interactif détecté, continuation automatique...")
     
     # Prepare dataset path
     base_name = os.path.splitext(os.path.basename(args.filename))[0]
@@ -467,6 +502,14 @@ def main():
     print(f"Vectorization: Enhanced with vulnerability patterns")
     print(f"Dataset: {args.filename}")
     print(f"Vulnerability Type: {args.vt}")
+    print(f"Training Parameters:")
+    print(f"  - Learning Rate: {args.lr}")
+    print(f"  - Epochs: {args.epochs}")
+    print(f"  - Batch Size: {args.batch_size}")
+    print(f"  - Transformer Layers: {args.num_transformer_layers}")
+    print(f"  - Attention Heads: {args.num_heads}")
+    print(f"  - Embedding Dim: {args.embedding_dim}")
+    print(f"  - Dropout: {args.dropout}")
     print(f"Training Time: {training_time:.2f}s")
     print(f"Final Accuracy: {results['accuracy']:.4f}")
     print(f"Final F1-Score: {results['f1_score']:.4f}")
@@ -475,6 +518,8 @@ def main():
     if IN_COLAB:
         print("\n📊 All plots have been displayed inline in Colab")
     
+    print("=" * 60)
+    print("🎉 TRAINING COMPLETED SUCCESSFULLY! 🎉")
     print("=" * 60)
 
 if __name__ == '__main__':
